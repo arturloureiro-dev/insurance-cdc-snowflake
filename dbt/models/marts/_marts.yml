@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  - name: dim_policy_current
+    description: Current state of each policy, rebuilt only from CDC events.
+    columns:
+      - name: policy_id
+        data_tests: [unique, not_null]
+      - name: annual_premium
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+
+  - name: dim_policy_history
+    description: SCD type 2 history of policies (one row per version).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ['policy_id', 'change_id']
+    columns:
+      - name: policy_version_key
+        data_tests: [unique, not_null]
+
+  - name: fct_endorsements
+    description: One row per endorsement (incremental).
+    columns:
+      - name: endorsement_id
+        data_tests: [unique, not_null]
+      - name: policy_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_policy_history')
+                field: policy_id
+
+  - name: mart_portfolio_by_region
+    description: Portfolio KPIs by region and product line.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ['region_code', 'product_line']
+    columns:
+      - name: cancellation_rate
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1

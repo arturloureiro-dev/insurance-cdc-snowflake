@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: stg_policy_changes
+    description: Typed policy change log. Grain = one captured change.
+    columns:
+      - name: change_id
+        data_tests: [unique, not_null]
+      - name: policy_id
+        data_tests: [not_null]
+      - name: change_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['insert', 'update', 'delete']
+      - name: policy_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['ACTIVE', 'CANCELLED']
+              config:
+                where: "change_type <> 'delete'"
+
+  - name: stg_endorsement_changes
+    description: Typed endorsement change log. Grain = one captured change.
+    columns:
+      - name: change_id
+        data_tests: [unique, not_null]
+      - name: endorsement_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['PREMIUM_ADJUSTMENT', 'VEHICLE_CHANGE', 'ADDRESS_CHANGE', 'CANCELLATION']

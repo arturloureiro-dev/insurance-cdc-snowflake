@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  python:
+    name: Lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: pytest -q
+
+  dbt:
+    name: dbt build (Snowflake)
+    runs-on: ubuntu-latest
+    needs: python
+    env:
+      DBT_TARGET: ci
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PRIVATE_KEY_PATH: ${{ github.workspace }}/rsa_key.p8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install "dbt-snowflake>=1.10,<2"
+      - name: dbt deps and parse (no warehouse needed)
+        working-directory: dbt
+        run: |
+          dbt deps --profiles-dir .
+          dbt parse --profiles-dir .
+      - name: Write Snowflake private key
+        if: ${{ env.SNOWFLAKE_ACCOUNT != '' }}
+        run: echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > rsa_key.p8
+      - name: dbt build into a throwaway CI schema
+        if: ${{ env.SNOWFLAKE_ACCOUNT != '' }}
+        working-directory: dbt
+        run: dbt build --profiles-dir .
+      - name: Drop CI schemas
+        if: ${{ always() && env.SNOWFLAKE_ACCOUNT != '' }}
+        working-directory: dbt
+        run: dbt run-operation drop_ci_schemas --profiles-dir .
